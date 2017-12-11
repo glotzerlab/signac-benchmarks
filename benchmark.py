@@ -160,10 +160,7 @@ if __name__ == '__main__':
                 with Collection.open('benchmark.txt') as c:
                     c.replace_one(key, doc, upsert=True)
 
-    elif args.cmd == 'report':
-        assert args.style == 'per-N'
-        headers = ['N', 'Size', 'Category', 'Time  / N [\u00B5s]']
-        rows = []
+    elif args.cmd in ('report', 'plot'):
         if args.db:
             db = signac.get_database('testing')
             c = db.signac_benchmarks
@@ -171,52 +168,52 @@ if __name__ == '__main__':
         else:
             with Collection.open('benchmark.txt') as c:
                 docs = list(sorted(c.find(q_reports), key=key_reports))
+        if not docs:
+            raise RuntimeError("No data!")
 
-        for doc in docs:
-            for i, (cat, values) in enumerate(doc['data'].items()):
-                n, min_value = list(sorted(values, key=lambda x: x[1]))[0]
-                mean_min_value = 1e6 * min_value / n / doc['meta']['N']
-                if i:
-                    rows.append([None, None, cat, mean_min_value])
-                else:
-                    rows.append(
-                        [doc['meta']['N'], fmt_size(doc['size']['total']),
-                         cat, mean_min_value])
-        print(tabulate(rows, headers=headers))
+        if args.cmd == 'report':
+            assert args.style == 'per-N'
+            headers = ['N', 'Size', 'Category', 'Time  / N [\u00B5s]']
+            rows = []
 
-    elif args.cmd == 'plot':
-        import numpy as np
-        from matplotlib import pyplot as plt
+            for doc in docs:
+                for i, (cat, values) in enumerate(doc['data'].items()):
+                    n, min_value = list(sorted(values, key=lambda x: x[1]))[0]
+                    mean_min_value = 1e6 * min_value / n / doc['meta']['N']
+                    if i:
+                        rows.append([None, None, cat, mean_min_value])
+                    else:
+                        rows.append(
+                            [doc['meta']['N'], fmt_size(doc['size']['total']),
+                             cat, mean_min_value])
+            print(tabulate(rows, headers=headers))
 
-        q_reports['N'] = {'$gte': 100}
+        elif args.cmd == 'plot':
+            import numpy as np
+            from matplotlib import pyplot as plt
 
-        fig, ax = plt.subplots()
+            q_reports['N'] = {'$gte': 100}
 
-        def fmt_meta(meta):
-            return "{} ({})".format(meta['N'], fmt_size(meta['size']['total']))
-            return "N={}/{}/{} ({})".format(
-                meta['N'], meta['num_keys'], meta['num_meta_keys'], fmt_size(meta['size']['total']))
+            fig, ax = plt.subplots()
 
-        def calc_means(doc):
-            for cat in sorted(doc['data']):
-                values = doc['data'][cat]
-                n, min_value = list(sorted(values, key=lambda x: x[1]))[0]
-                if args.style in ('per-N', 'factor'):
-                    yield cat, 1e6 * min_value / n / doc['N']
-                if args.style in ('per-size'):
-                    yield cat, 1e6 * min_value / n / doc['size']['total']
-                elif args.style == 'absolute':
-                    yield cat, min_value / n
-                elif args.style == 'num-per-minute':
-                    print(cat, 1.0 / (min_value / n));
-                    yield cat, 1.0 / (60 * min_value / n)
-                else:
-                    raise NotImplementedError(args.style)
+            def fmt_doc(doc):
+                return "{} ({})".format(doc['meta']['N'], fmt_size(doc['size']['total']))
 
-        with Collection.open('benchmark.txt') as c:
-            docs = list(sorted(c.find(q_reports), key=key_reports))
-            if not docs:
-                raise RuntimeError("No data!")
+            def calc_means(doc):
+                for cat in sorted(doc['data']):
+                    values = doc['data'][cat]
+                    n, min_value = list(sorted(values, key=lambda x: x[1]))[0]
+                    if args.style in ('per-N', 'factor'):
+                        yield cat, 1e6 * min_value / n / doc['meta']['N']
+                    elif args.style in ('per-size'):
+                        yield cat, 1e6 * min_value / n / doc['size']['total']
+                    elif args.style == 'absolute':
+                        yield cat, min_value / n
+                    elif args.style == 'num-per-minute':
+                        print(cat, 1.0 / (min_value / n));
+                        yield cat, 1.0 / (60 * min_value / n)
+                    else:
+                        raise NotImplementedError(args.style)
 
             cats = list(sorted(docs[0]['data']))
 
@@ -249,7 +246,7 @@ if __name__ == '__main__':
                 p.append(ax.bar(1.2 * ind + width * ((i + 0.5) / M - 0.5), m, 0.8 * w))
 
             ax.set_xticks(1.2 * ind)
-            ax.set_xticklabels([fmt_meta(doc['meta']) for doc in docs], rotation=0)
+            ax.set_xticklabels([fmt_doc(doc) for doc in docs], rotation=0)
             if args.style == 'factor':
                 ax.set_ylabel("X")
             elif args.style == 'absolute':
