@@ -125,7 +125,7 @@ if __name__ == '__main__':
                     'categories': args.categories,
                     'platform': platform.uname()._asdict(),
                     'versions': {
-                        'python': sys.version_info,
+                        'python': '.'.join(map(str, sys.version_info)),
                         'signac': signac.__version__,
                     }}}
             key = doc.copy()
