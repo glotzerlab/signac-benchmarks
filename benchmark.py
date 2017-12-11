@@ -102,31 +102,32 @@ if __name__ == '__main__':
             'factor',           # divided by the minimal time
             'num-per-minute',   # number of operations per minute
             ], default='per-N')
+    parser.add_argument('--db', action='store_true')
     args = parser.parse_args()
 
-    q_reports = {'profile': {'$exists': False}, 'categories': None}
+    q_reports = {'profile': {'$exists': False}, 'meta.categories': None}
     if args.query:
         q_reports.update(json.loads(args.query))
 
     def key_reports(doc):
-        return [doc[k] for k in ('N', 'num_keys', 'num_doc_keys', 'data_size')]
+        return [doc['meta'][k] for k in ('N', 'num_keys', 'num_doc_keys', 'data_size')]
 
     if args.cmd == 'run':
         for N, num_keys, num_doc_keys, data_size in product(
                 args.N, args.num_keys, args.num_doc_keys, args.data_size):
             assert all(isinstance(_, int) for _ in (N, data_size, num_keys, num_doc_keys))
-            doc = {
-                'N': N,
-                'num_keys': num_keys,
-                'num_doc_keys': num_doc_keys,
-                'data_size': data_size,
-                'seed': args.seed,
-                'categories': args.categories,
-                'platform': platform.uname()._asdict(),
-                'versions': {
-                    'python': sys.version_info,
-                    'signac': signac.__version__,
-                }}
+            doc = {'meta': {
+                    'N': N,
+                    'num_keys': num_keys,
+                    'num_doc_keys': num_doc_keys,
+                    'data_size': data_size,
+                    'seed': args.seed,
+                    'categories': args.categories,
+                    'platform': platform.uname()._asdict(),
+                    'versions': {
+                        'python': sys.version_info,
+                        'signac': signac.__version__,
+                    }}}
             key = doc.copy()
             key['profile'] = {'$exists': args.profile}
 
@@ -163,18 +164,24 @@ if __name__ == '__main__':
         assert args.style == 'per-N'
         headers = ['N', 'Size', 'Category', 'Time  / N [\u00B5s]']
         rows = []
-        with Collection.open('benchmark.txt') as c:
+        if args.db:
+            db = signac.get_database('testing')
+            c = db.signac_benchmarks
             docs = list(sorted(c.find(q_reports), key=key_reports))
-            for doc in docs:
-                for i, (cat, values) in enumerate(doc['data'].items()):
-                    n, min_value = list(sorted(values, key=lambda x: x[1]))[0]
-                    mean_min_value = 1e6 * min_value / n / doc['N']
-                    if i:
-                        rows.append([None, None, cat, mean_min_value])
-                    else:
-                        rows.append(
-                            [doc['N'], fmt_size(doc['size']['total']),
-                             cat, mean_min_value])
+        else:
+            with Collection.open('benchmark.txt') as c:
+                docs = list(sorted(c.find(q_reports), key=key_reports))
+
+        for doc in docs:
+            for i, (cat, values) in enumerate(doc['data'].items()):
+                n, min_value = list(sorted(values, key=lambda x: x[1]))[0]
+                mean_min_value = 1e6 * min_value / n / doc['meta']['N']
+                if i:
+                    rows.append([None, None, cat, mean_min_value])
+                else:
+                    rows.append(
+                        [doc['meta']['N'], fmt_size(doc['size']['total']),
+                         cat, mean_min_value])
         print(tabulate(rows, headers=headers))
 
     elif args.cmd == 'plot':
@@ -185,10 +192,10 @@ if __name__ == '__main__':
 
         fig, ax = plt.subplots()
 
-        def fmt_meta(doc):
-            return "{} ({})".format(doc['N'], fmt_size(doc['size']['total']))
+        def fmt_meta(meta):
+            return "{} ({})".format(meta['N'], fmt_size(meta['size']['total']))
             return "N={}/{}/{} ({})".format(
-                doc['N'], doc['num_keys'], doc['num_doc_keys'], fmt_size(doc['size']['total']))
+                meta['N'], meta['num_keys'], meta['num_meta_keys'], fmt_size(meta['size']['total']))
 
         def calc_means(doc):
             for cat in sorted(doc['data']):
@@ -242,7 +249,7 @@ if __name__ == '__main__':
                 p.append(ax.bar(1.2 * ind + width * ((i + 0.5) / M - 0.5), m, 0.8 * w))
 
             ax.set_xticks(1.2 * ind)
-            ax.set_xticklabels([fmt_meta(doc) for doc in docs], rotation=0)
+            ax.set_xticklabels([fmt_meta(doc['meta']) for doc in docs], rotation=0)
             if args.style == 'factor':
                 ax.set_ylabel("X")
             elif args.style == 'absolute':
