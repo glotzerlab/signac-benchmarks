@@ -88,14 +88,20 @@ if __name__ == '__main__':
         '-s', '--data-size', type=int, default=[100])
     parser.add_argument('--data-std', type=float, default=25)
     parser.add_argument('-p', '--profile', action='store_true')
-    parser.add_argument('--min-factor', action='store_true')
-    parser.add_argument('--absolute', action='store_true')
     parser.add_argument('-r', '--seed', type=int, default=0)
     parser.add_argument('-c', '--categories', nargs='+')
     parser.add_argument('--overwrite', action='store_true')
     parser.add_argument('-n', '--dry-run', action='store_true')
     parser.add_argument('-q', '--query', type=str)
     parser.add_argument('--root', type=str)
+    parser.add_argument(
+        '--style', choices=[
+            'absolute',         # absolute time in seconds
+            'per-N',            # divided by the number of project state points
+            'per-size',         # divided by the total metadata size
+            'factor',           # divided by the minimal time
+            'num-per-minute',   # number of operations per minute
+            ], default='per-N')
     args = parser.parse_args()
 
     q_reports = {'profile': {'$exists': False}, 'categories': None}
@@ -154,8 +160,7 @@ if __name__ == '__main__':
                     c.replace_one(key, doc, upsert=True)
 
     elif args.cmd == 'report':
-        assert not args.min_factor
-        assert not args.absolute
+        assert args.style == 'per-N'
         headers = ['N', 'Size', 'Category', 'Time  / N [\u00B5s]']
         rows = []
         with Collection.open('benchmark.txt') as c:
@@ -189,10 +194,17 @@ if __name__ == '__main__':
             for cat in sorted(doc['data']):
                 values = doc['data'][cat]
                 n, min_value = list(sorted(values, key=lambda x: x[1]))[0]
-                if args.absolute:
-                    yield cat, min_value / n
-                else:
+                if args.style in ('per-N', 'factor'):
                     yield cat, 1e6 * min_value / n / doc['N']
+                if args.style in ('per-size'):
+                    yield cat, 1e6 * min_value / n / doc['size']['total']
+                elif args.style == 'absolute':
+                    yield cat, min_value / n
+                elif args.style == 'num-per-minute':
+                    print(cat, 1.0 / (min_value / n));
+                    yield cat, 1.0 / (60 * min_value / n)
+                else:
+                    raise NotImplementedError(args.style)
 
         with Collection.open('benchmark.txt') as c:
             docs = list(sorted(c.find(q_reports), key=key_reports))
@@ -208,7 +220,7 @@ if __name__ == '__main__':
             minima = dict()
             xtics = []
 
-            if args.min_factor:
+            if args.style == 'factor':
                 for doc in docs:
                     for cat, mean_min_value in calc_means(doc):
                         if cat in minima:
@@ -231,12 +243,18 @@ if __name__ == '__main__':
 
             ax.set_xticks(1.2 * ind)
             ax.set_xticklabels([fmt_meta(doc) for doc in docs], rotation=0)
-            if args.min_factor:
+            if args.style == 'factor':
                 ax.set_ylabel("X")
-            elif args.absolute:
+            elif args.style == 'absolute':
                 ax.set_ylabel("Time [s]")
-            else:
+            elif args.style == 'per-N':
                 ax.set_ylabel("Time / N [\u00B5s]")
+            elif args.style == 'per-size':
+                ax.set_ylabel("Time / size [\u00B5s/Bytes]")
+            elif args.style == 'num-per-minute':
+                ax.set_ylabel("Per Second [s-1]")
+            else:
+                raise NotImplementedError(args.style)
             ax.legend([p_[0] for p_ in p], list(map(tr, cats)))
             fig.tight_layout()
             plt.show()
