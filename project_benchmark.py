@@ -1,5 +1,6 @@
 import os
 import timeit
+from collections import OrderedDict
 
 from tqdm import tqdm
 
@@ -57,42 +58,37 @@ def determine_project_size(project):
     return meta
 
 
-def benchmark_project(project):
+def benchmark_project(project, keys=None):
     root = project.root_directory()
     setup = "import signac; project = signac.get_project(root='{}'); ".format(root)
     setup += "from itertools import islice, repeat; import random; "
 
-    from collections import OrderedDict
     data = OrderedDict()
 
-    data['json_serialization'] = Timer(
-            stmt='json.loads(json.dumps(doc))',
-            setup="import json; doc={'hello': 'world'}").repeat(repeat=20, number=1000)
+    def run(key, timer, repeat=3, number=10):
+        if keys is None or key in keys:
+            data[key] = timer.repeat(repeat=repeat, number=number)
 
-    data['determine_len'] = Timer('len(project)', setup=setup).repeat()
 
-    data['select_job_by_id'] = Timer(
+    run('determine_len', Timer('len(project)', setup=setup))
+
+    run('select_job_by_id', Timer(
             stmt="project.open_job(id=jobid)",
-            setup=setup+"jobid = random.choice(list(islice(project, 100))).get_id()",
-            ).repeat()
+            setup=setup+"jobid = random.choice(list(islice(project, 100))).get_id()"))
 
-    data['iterate_100'] = Timer(
-        "list(islice((j for p in repeat(project, 1) for j in p), 100))",
-        setup
-        ).repeat()
+    run('iterate_100', Timer(
+        "list(islice((j for p in repeat(project, 1) for j in p), 100))", setup))
 
-    data['search_simple'] = Timer(
+    run('search_lean_filter', Timer(
             stmt="len(project.find_jobs(f))",
-            setup=setup+"sp = project.open_job(id=random.choice(list(project.find_job_ids()))).sp(); k, v = sp.popitem(); f = {k: v}"
-            ).repeat()
+            setup=setup+"sp = project.open_job(id=random.choice(list(project.find_job_ids()))).sp(); k, v = sp.popitem(); f = {k: v}"))
 
-    data['search_full'] = Timer(
+    run('search_rich_filter', Timer(
             stmt="len(project.find_jobs(f))",
-            setup=setup+"f = project.open_job(id=random.choice(list(project.find_job_ids()))).sp()",
-            ).repeat()
+            setup=setup+"f = project.open_job(id=random.choice(list(project.find_job_ids()))).sp()"))
 
-    data['index_100'] = Timer(
+    run('index_100', Timer(
         stmt="list(islice((_ for p in repeat(project) for _ in p.index()), 100))",
-        setup=setup,
-        ).repeat()
+        setup=setup))
+
     return data
