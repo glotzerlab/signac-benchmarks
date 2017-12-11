@@ -1,11 +1,13 @@
 import sys
 import random
 import string
+import platform
 import base64
+import json
 from tempfile import TemporaryDirectory, NamedTemporaryFile
 from cProfile import Profile
 from contextlib import contextmanager
-from multiprocessing import Pool
+from itertools import product
 
 from tabulate import tabulate
 from tqdm import tqdm
@@ -21,21 +23,28 @@ def fmt_size(size, units=None):
     return str(size) + units.pop(0) if size < 1024 else fmt_size(size >> 10, units[1:])
 
 
-def make_doc(i, data_size=None):
-    if data_size is None:
-        data = str(i)
-    else:
-        data = ''.join(random.choice(string.ascii_lowercase) for _ in range(data_size))
-    return {str(i): data}
+def _random_str(size):
+    return ''.join(random.choice(string.ascii_lowercase) for _ in range(size))
 
 
-def generate_random_data(project, N_sp, sp_size=None, doc_size=None):
+def make_doc(i, num_keys=1, data_size=0):
+    assert num_keys >= 1
+    assert data_size >= 0
+
+    doc = {'b_{}'.format(j): _random_str(data_size) for j in range(num_keys - 1)}
+    doc['a'] = '{}{}'.format(i, _random_str(max(0, data_size - len(str(i)))))
+    return doc
+
+
+def generate_random_data(project, N_sp, num_keys=1, num_doc_keys=0, data_size=0, data_std=0):
     assert len(project) == 0
 
     def make(i):
-        job = project.open_job(make_doc(i, sp_size))
-        if doc_size:
-            job.document.update(make_doc(i, doc_size))
+        size = max(0, int(random.gauss(data_size, data_std)))
+        job = project.open_job(make_doc(i, num_keys, size))
+        if num_doc_keys > 0:
+            size = max(0, int(random.gauss(data_size, data_std)))
+            job.document.update(make_doc(i, num_doc_keys, size))
         else:
             job.init()
 
@@ -43,14 +52,14 @@ def generate_random_data(project, N_sp, sp_size=None, doc_size=None):
 
 
 @contextmanager
-def setup_project(N, data_size, seed=0):
+def setup_project(N, num_keys, num_doc_keys, data_size, data_std, seed=0, root=None):
     random.seed(seed)
     if not isinstance(N, int):
         raise TypeError("N must be an integer!")
 
-    with TemporaryDirectory() as tmp:
+    with TemporaryDirectory(dir=root) as tmp:
         project = signac.init_project('benchmark-N={}'.format(N), root=tmp)
-        generate_random_data(project, N, data_size, data_size)
+        generate_random_data(project, N, num_keys, num_doc_keys, data_size, data_std)
         yield project
 
 
@@ -69,51 +78,80 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('cmd', choices=['run', 'report', 'plot'])
-    parser.add_argument('-N', nargs='+', type=int, default=[10, 100, 1000, 1e4, 1e5, 1e6])
-    parser.add_argument('-s', '--data-size', nargs='+', type=int, default=[100, 1000])
+    parser.add_argument(
+        '-N', nargs='+', type=int, default=[10, 100, 1000, 10000])
+    parser.add_argument(
+        '-k', '--num-keys', type=int, nargs='+', default=[10])
+    parser.add_argument(
+        '--num-doc-keys', type=int, nargs='+', default=[10])
+    parser.add_argument(
+        '-s', '--data-size', type=int, default=[100])
+    parser.add_argument('--data-std', type=float, default=25)
     parser.add_argument('-p', '--profile', action='store_true')
     parser.add_argument('--min-factor', action='store_true')
     parser.add_argument('--absolute', action='store_true')
     parser.add_argument('-r', '--seed', type=int, default=0)
     parser.add_argument('-c', '--categories', nargs='+')
     parser.add_argument('--overwrite', action='store_true')
+    parser.add_argument('-n', '--dry-run', action='store_true')
+    parser.add_argument('-q', '--query', type=str)
+    parser.add_argument('--root', type=str)
     args = parser.parse_args()
 
     q_reports = {'profile': {'$exists': False}, 'categories': None}
-    key_reports=lambda doc: (doc['N'], doc['data_size'])
+    if args.query:
+        q_reports.update(json.loads(args.query))
+
+    def key_reports(doc):
+        return [doc[k] for k in ('N', 'num_keys', 'num_doc_keys', 'data_size')]
 
     if args.cmd == 'run':
-        for N in [int(N) for N in args.N]:
-            for data_size in args.data_size:
-                random.seed(args.seed)
-                doc = {'N': N, 'data_size': data_size,
-                        'seed': args.seed, 'version': signac.__version__,
-                        'categories': args.categories}
-                key = doc.copy()
-                key['profile'] = {'$exists': args.profile}
+        for N, num_keys, num_doc_keys, data_size in product(
+                args.N, args.num_keys, args.num_doc_keys, args.data_size):
+            assert all(isinstance(_, int) for _ in (N, data_size, num_keys, num_doc_keys))
+            doc = {
+                'N': N,
+                'num_keys': num_keys,
+                'num_doc_keys': num_doc_keys,
+                'data_size': data_size,
+                'seed': args.seed,
+                'categories': args.categories,
+                'platform': platform.uname()._asdict(),
+                'versions': {
+                    'python': sys.version_info,
+                    'signac': signac.__version__,
+                }}
+            key = doc.copy()
+            key['profile'] = {'$exists': args.profile}
 
-                if not args.overwrite:
-                    with Collection.open('benchmark.txt') as c:
-                        if len(c.find(key)) >= 1:
-                            continue   # already run
-                with setup_project(N, data_size, args.seed) as project:
-                    doc['size'] = pb.determine_project_size(project)
+            if not args.overwrite:
+                with Collection.open('benchmark.txt') as c:
+                    if len(c.find(key)) >= 1:
+                        continue   # already run
+            expected_size = N * data_size * (num_keys + num_doc_keys)
+            if args.dry_run:
+                print("Expected size:", fmt_size(int(expected_size)))
+                continue
+            with setup_project(N, num_keys, num_doc_keys,
+                               data_size=data_size, data_std=args.data_std,
+                               seed=args.seed, root=args.root) as project:
+                doc['size'] = pb.determine_project_size(project)
 
-                    if args.profile:
-                        profile = Profile()
-                        profile.enable()
-                        doc['data'] = pb.benchmark_project(project, args.categories)
-                        profile.disable()
-                        with NamedTemporaryFile() as statsfile:
-                            profile.dump_stats(statsfile.name)
-                            statsfile.flush()
-                            statsfile.seek(0)
-                            doc['profile'] = base64.b64encode(statsfile.read()).decode()
-                    else:
-                        doc['data'] = pb.benchmark_project(project, args.categories)
+                if args.profile:
+                    profile = Profile()
+                    profile.enable()
+                    doc['data'] = pb.benchmark_project(project, args.categories)
+                    profile.disable()
+                    with NamedTemporaryFile() as statsfile:
+                        profile.dump_stats(statsfile.name)
+                        statsfile.flush()
+                        statsfile.seek(0)
+                        doc['profile'] = base64.b64encode(statsfile.read()).decode()
+                else:
+                    doc['data'] = pb.benchmark_project(project, args.categories)
 
-                    with Collection.open('benchmark.txt') as c:
-                        c.replace_one(key, doc, upsert=True)
+                with Collection.open('benchmark.txt') as c:
+                    c.replace_one(key, doc, upsert=True)
 
     elif args.cmd == 'report':
         assert not args.min_factor
@@ -143,7 +181,9 @@ if __name__ == '__main__':
         fig, ax = plt.subplots()
 
         def fmt_meta(doc):
-            return "N={} ({})".format(doc['N'], fmt_size(doc['size']['total']))
+            return "{} ({})".format(doc['N'], fmt_size(doc['size']['total']))
+            return "N={}/{}/{} ({})".format(
+                doc['N'], doc['num_keys'], doc['num_doc_keys'], fmt_size(doc['size']['total']))
 
         def calc_means(doc):
             for cat in sorted(doc['data']):
@@ -190,7 +230,7 @@ if __name__ == '__main__':
                 p.append(ax.bar(1.2 * ind + width * ((i + 0.5) / M - 0.5), m, 0.8 * w))
 
             ax.set_xticks(1.2 * ind)
-            ax.set_xticklabels([fmt_meta(doc) for doc in docs], rotation=15)
+            ax.set_xticklabels([fmt_meta(doc) for doc in docs], rotation=0)
             if args.min_factor:
                 ax.set_ylabel("X")
             elif args.absolute:
