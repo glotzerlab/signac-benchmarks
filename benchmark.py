@@ -189,17 +189,16 @@ if __name__ == '__main__':
             print(tabulate(rows, headers=headers))
 
         elif args.cmd == 'plot':
+            from itertools import groupby
             import numpy as np
             from matplotlib import pyplot as plt
-
-            q_reports['N'] = {'$gte': 100}
 
             fig, ax = plt.subplots()
 
             def fmt_doc(doc):
                 return "{} ({})".format(doc['meta']['N'], fmt_size(doc['size']['total']))
 
-            def calc_means(doc):
+            def _calc_means(doc):
                 for cat in sorted(doc['data']):
                     values = doc['data'][cat]
                     n, min_value = list(sorted(values, key=lambda x: x[1]))[0]
@@ -215,16 +214,26 @@ if __name__ == '__main__':
                     else:
                         raise NotImplementedError(args.style)
 
+            def calc_means(group):
+                def mean(doc, cat):
+                    n, min_value = list(sorted(doc['data'][cat], key=lambda x: x[1]))[0]
+                    if args.style == 'per-N':
+                        return min_value / n / doc['meta']['N']
+
+                group = list(group)
+                for cat in cats:
+                    data = [mean(doc, cat) for doc in group]
+                    yield cat, np.mean(data)
+
             cats = list(sorted(docs[0]['data']))
 
             width = 1.0
-            N = len(docs)
-            ind = np.arange(N)
             data = []
             minima = dict()
             xtics = []
 
             if args.style == 'factor':
+                raise NotImplementedError()
                 for doc in docs:
                     for cat, mean_min_value in calc_means(doc):
                         if cat in minima:
@@ -235,18 +244,18 @@ if __name__ == '__main__':
                 minima = {cat: 1.0 for cat in cats}
 
             data = []
-            for doc in docs:
-                data.append([mmv / minima[cat] for cat, mmv in calc_means(doc)])
-
+            for key, group in groupby(docs, key=fmt_doc):
+                data.append([mmv / minima[cat] for cat, mmv in calc_means(group)])
             x = np.array(data)
             M = len(x.T)
             w = width / M
             p = []
+            ind = np.arange(len(x))
             for i, m in enumerate(x.T):
                 p.append(ax.bar(1.2 * ind + width * ((i + 0.5) / M - 0.5), m, 0.8 * w))
 
             ax.set_xticks(1.2 * ind)
-            ax.set_xticklabels([fmt_doc(doc) for doc in docs], rotation=0)
+            ax.set_xticklabels([key for key, _ in groupby(docs, key=fmt_doc)])
             if args.style == 'factor':
                 ax.set_ylabel("X")
             elif args.style == 'absolute':
