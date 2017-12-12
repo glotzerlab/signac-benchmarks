@@ -265,12 +265,29 @@ if __name__ == '__main__':
 
     elif args.cmd == 'pstats':
         stats = Stats()
-        with Collection.open('benchmark.txt') as c:
-            for doc in c.find({'profile': {'$ne': None}}):
-                with NamedTemporaryFile() as tmp:
-                    tmp.write(base64.b64decode(doc['profile'].encode()))
-                    tmp.flush()
-                    stats.add(tmp.name)
+
+        def add_to_stats(doc):
+            with NamedTemporaryFile() as tmp:
+                tmp.write(base64.b64decode(doc['profile'].encode()))
+                tmp.flush()
+                stats.add(tmp.name)
+
+        q_profile = {'profile': {'$ne': None}}
+        if args.query:
+            q_profile.update(json.loads(args.query))
+
+        if args.db:
+            db = signac.get_database('testing')
+            for doc in db.signac_benchmarks.find(q_profile):
+                add_to_stats(doc)
+        else:
+            with Collection.open(args.filename) as c:
+                print(c)
+                for doc in c.find(q_profile):
+                    print(doc['meta'])
+                    add_to_stats(doc)
+
+        stats.strip_dirs()
         stats.sort_stats('cumtime')
         stats.print_stats()
 
