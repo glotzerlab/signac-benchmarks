@@ -69,7 +69,6 @@ def benchmark_project(project, keys=None):
         if keys is None or key in keys:
             data[key] = timer.repeat(repeat=repeat, number=number)
 
-
     run('determine_len', Timer('len(project)', setup=setup))
 
     run('select_job_by_id', Timer(
@@ -78,6 +77,10 @@ def benchmark_project(project, keys=None):
 
     run('iterate_100', Timer(
         "list(islice((j for p in repeat(project, 1) for j in p), 100))", setup), 3, 1)
+
+    run('iterate_100_cached', Timer(
+        stmt="list(islice((j for p in repeat(project, 1) for j in p), 100))",
+        setup=setup + "list(islice((j for p in repeat(project, 1) for j in p), 100))"))
 
     run('search_lean_filter', Timer(
             stmt="len(project.find_jobs(f))",
@@ -90,5 +93,9 @@ def benchmark_project(project, keys=None):
     run('index_100', Timer(
         stmt="list(islice((_ for p in repeat(project) for _ in p.index()), 100))",
         setup=setup), 3, 1)
+
+    run('index_100_cached', Timer(
+        stmt="list(islice((_ for p in repeat(project) for _ in p.index()), 100))",
+        setup=setup + "list(islice((_ for p in repeat(project) for _ in p.index()), 100))"))
 
     return data
