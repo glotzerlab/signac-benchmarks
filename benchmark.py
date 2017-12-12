@@ -6,6 +6,7 @@ import base64
 import json
 from tempfile import TemporaryDirectory, NamedTemporaryFile
 from cProfile import Profile
+from pstats import Stats
 from contextlib import contextmanager
 from itertools import product, groupby
 
@@ -77,7 +78,7 @@ def tr(s):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('cmd', choices=['run', 'report', 'plot'])
+    parser.add_argument('cmd', choices=['run', 'report', 'plot', 'pstats'])
     parser.add_argument(
         '-N', nargs='+', type=int, default=[10, 100, 1000, 10000])
     parser.add_argument(
@@ -257,6 +258,17 @@ if __name__ == '__main__':
             ax.legend([p_[0] for p_ in p], list(map(tr, cats)))
             fig.tight_layout()
             plt.show()
+
+    elif args.cmd == 'pstats':
+        stats = Stats()
+        with Collection.open('benchmark.txt') as c:
+            for doc in c.find({'profile': {'$ne': None}}):
+                with NamedTemporaryFile() as tmp:
+                    tmp.write(base64.b64decode(doc['profile'].encode()))
+                    tmp.flush()
+                    stats.add(tmp.name)
+        stats.sort_stats('cumtime')
+        stats.print_stats()
 
     else:
         raise ValueError("Illegal command: '{}'.".format(args.cmd))

@@ -7,4 +7,5 @@ with signac.Collection.open('benchmark.txt') as c:
     for doc in c:
         del doc['_id']
         key = dict(_traverse_tree(doc['meta'], key='meta'))
+        key['profile'] = {'$ne' if doc.get('profile') else '$eq': None}
         db.signac_benchmarks.replace_one(key, doc, upsert=True)
