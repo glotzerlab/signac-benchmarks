@@ -80,7 +80,7 @@ def benchmark_project(project, keys=None):
 
     run('iterate_100_cached', Timer(
         stmt="list(islice((j for p in repeat(project, 1) for j in p), 100))",
-        setup=setup + "list(islice((j for p in repeat(project, 1) for j in p), 100))"))
+        setup=setup + "list(project)"))
 
     run('search_lean_filter', Timer(
             stmt="len(project.find_jobs(f))",
@@ -93,9 +93,5 @@ def benchmark_project(project, keys=None):
     run('index_100', Timer(
         stmt="list(islice((_ for p in repeat(project) for _ in p.index()), 100))",
         setup=setup), 3, 1)
-
-    run('index_100_cached', Timer(
-        stmt="list(islice((_ for p in repeat(project) for _ in p.index()), 100))",
-        setup=setup + "list(islice((_ for p in repeat(project) for _ in p.index()), 100))"))
 
     return data

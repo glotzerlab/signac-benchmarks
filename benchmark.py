@@ -67,8 +67,9 @@ def setup_project(N, num_keys, num_doc_keys, data_size, data_std, seed=0, root=N
 def tr(s):
     return {
         'determine_len': "Determine project size",
-        'index_100': "Generate 100 index entries",
-        'iterate_100': "Iterate through 100 jobs",
+        'iterate_100': "Iterate through all jobs",
+        'iterate_100_cached': "Iterate throughall jobs (cached)",
+        'index_100': "Generate project index",
         'search_rich_filter': "Search with rich filter",
         'search_lean_filter': "Search with lean filter",
         'select_job_by_id': "Select job by id",
