@@ -282,9 +282,7 @@ if __name__ == '__main__':
                 add_to_stats(doc)
         else:
             with Collection.open(args.filename) as c:
-                print(c)
                 for doc in c.find(q_profile):
-                    print(doc['meta'])
                     add_to_stats(doc)
 
         stats.strip_dirs()
