@@ -264,7 +264,10 @@ if __name__ == '__main__':
             ax.set_xticks(1.2 * ind)
             ax.set_xticklabels([key for key, _ in groupby(docs, key=fmt_doc)])
             ax.set_ylabel(label)
-            ax.legend([p_[0] for p_ in p], list(map(tr, cats)))
+            if args.style == 'per-N':
+                ax.set_ylim(0, max(x.max() + .1, 10.0))
+            ax.legend([p_[0] for p_ in p], list(map(tr, cats)), ncol=2)
+            ax.set_title(args.filename)
             fig.tight_layout()
             plt.show()
 
