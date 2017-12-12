@@ -228,8 +228,6 @@ if __name__ == '__main__':
         elif args.cmd == 'plot':
             from matplotlib import pyplot as plt
 
-            fig, ax = plt.subplots()
-
             def fmt_doc(doc):
                 return "N={:,} ({})".format(doc['meta']['N'], fmt_size(doc['size']['total']))
 
@@ -257,6 +255,9 @@ if __name__ == '__main__':
             w = width / M
             p = []
             ind = np.arange(len(x))
+
+            fig, ax = plt.subplots(figsize=(1.4 * M, 3))
+
             for i, m in enumerate(x.T):
                 p.append(ax.bar(1.2 * ind + width * ((i + 0.5) / M - 0.5), m, 0.8 * w))
 
