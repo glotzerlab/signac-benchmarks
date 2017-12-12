@@ -79,14 +79,15 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('cmd', choices=['run', 'report', 'plot', 'pstats'])
+    parser.add_argument('filename', nargs='?', default='benchmark.txt')
     parser.add_argument(
-        '-N', nargs='+', type=int, default=[10, 100, 1000, 10000])
+        '-N', nargs='+', type=int, default=[100, 1000, 10000])
     parser.add_argument(
         '-k', '--num-keys', type=int, nargs='+', default=[10])
     parser.add_argument(
         '--num-doc-keys', type=int, nargs='+', default=[10])
     parser.add_argument(
-        '-s', '--data-size', type=int, default=[100])
+        '-s', '--data-size', type=int, nargs='+', default=[100])
     parser.add_argument('--data-std', type=float, default=25)
     parser.add_argument('-p', '--profile', action='store_true')
     parser.add_argument('-r', '--seed', type=int, default=0)
@@ -133,7 +134,7 @@ if __name__ == '__main__':
             key['profile'] = {'$exists': args.profile}
 
             if not args.overwrite:
-                with Collection.open('benchmark.txt') as c:
+                with Collection.open(args.filename) as c:
                     if len(c.find(key)) >= 1:
                         continue   # already run
             expected_size = N * data_size * (num_keys + num_doc_keys)
@@ -158,7 +159,7 @@ if __name__ == '__main__':
                 else:
                     doc['data'] = pb.benchmark_project(project, args.categories)
 
-                with Collection.open('benchmark.txt') as c:
+                with Collection.open(args.filename) as c:
                     c.replace_one(key, doc, upsert=True)
 
     elif args.cmd in ('report', 'plot'):
@@ -169,7 +170,7 @@ if __name__ == '__main__':
             c = db.signac_benchmarks
             docs = list(sorted(c.find(q_reports), key=key_reports))
         else:
-            with Collection.open('benchmark.txt') as c:
+            with Collection.open(args.filename) as c:
                 docs = list(sorted(c.find(q_reports), key=key_reports))
         if not docs:
             raise RuntimeError("No data!")
