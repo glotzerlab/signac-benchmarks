@@ -182,6 +182,9 @@ if __name__ == '__main__':
 
         def mean(doc, cat):
             n, min_value = list(sorted(doc['data'][cat], key=lambda x: x[1]))[0]
+            if '100' in cat:
+                min_value *= doc['meta']['N'] / 100
+
             if args.style == 'per-N':
                 return 10e3 * min_value / n / doc['meta']['N']
             elif args.style == 'per-size':
