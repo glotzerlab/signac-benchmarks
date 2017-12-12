@@ -227,7 +227,7 @@ if __name__ == '__main__':
             fig, ax = plt.subplots()
 
             def fmt_doc(doc):
-                return "N={} ({})".format(doc['meta']['N'], fmt_size(doc['size']['total']))
+                return "N={:,} ({})".format(doc['meta']['N'], fmt_size(doc['size']['total']))
 
             width = 1.0
             data = []
