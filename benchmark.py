@@ -7,7 +7,7 @@ import json
 from tempfile import TemporaryDirectory, NamedTemporaryFile
 from cProfile import Profile
 from contextlib import contextmanager
-from itertools import product
+from itertools import product, groupby
 
 from tabulate import tabulate
 from tqdm import tqdm
@@ -100,8 +100,8 @@ if __name__ == '__main__':
             'per-N',            # divided by the number of project state points
             'per-size',         # divided by the total metadata size
             'factor',           # divided by the minimal time
-            'num-per-minute',   # number of operations per minute
-            ], default='per-N')
+            'inverted',   # number of operations per minute
+        ], default='per-N')
     parser.add_argument('--db', action='store_true')
     args = parser.parse_args()
 
@@ -117,17 +117,17 @@ if __name__ == '__main__':
                 args.N, args.num_keys, args.num_doc_keys, args.data_size):
             assert all(isinstance(_, int) for _ in (N, data_size, num_keys, num_doc_keys))
             doc = {'meta': {
-                    'N': N,
-                    'num_keys': num_keys,
-                    'num_doc_keys': num_doc_keys,
-                    'data_size': data_size,
-                    'seed': args.seed,
-                    'categories': args.categories,
-                    'platform': platform.uname()._asdict(),
-                    'versions': {
-                        'python': '.'.join(map(str, sys.version_info)),
-                        'signac': signac.__version__,
-                    }}}
+                'N': N,
+                'num_keys': num_keys,
+                'num_doc_keys': num_doc_keys,
+                'data_size': data_size,
+                'seed': args.seed,
+                'categories': args.categories,
+                'platform': platform.uname()._asdict(),
+                'versions': {
+                    'python': '.'.join(map(str, sys.version_info)),
+                    'signac': signac.__version__,
+                }}}
             key = doc.copy()
             key['profile'] = {'$exists': args.profile}
 
@@ -161,6 +161,8 @@ if __name__ == '__main__':
                     c.replace_one(key, doc, upsert=True)
 
     elif args.cmd in ('report', 'plot'):
+        import numpy as np
+
         if args.db:
             db = signac.get_database('testing')
             c = db.signac_benchmarks
@@ -171,61 +173,56 @@ if __name__ == '__main__':
         if not docs:
             raise RuntimeError("No data!")
 
+        cats = list(sorted(docs[0]['data']))
+
+        def group_key(doc):
+            return doc['meta']['N'], doc['size']['total']
+
+        def mean(doc, cat):
+            n, min_value = list(sorted(doc['data'][cat], key=lambda x: x[1]))[0]
+            if args.style == 'per-N':
+                return 10e3 * min_value / n / doc['meta']['N']
+            elif args.style == 'per-size':
+                return 10e3 * min_value / n / (doc['size']['total'] / 1024)
+            elif args.style == 'absolute':
+                return min_value / n
+            elif args.style == 'inverted':
+                return n / min_value / 1000
+            else:
+                raise NotImplementedError(args.style)
+
+        label = {
+            'absolute': "Time [s]",
+            'per-N': "Time / N [ms]",
+            'per-size': "Time / Size [ms/kB]",
+            'inverted': "1k OPs per second [1/s]",
+        }[args.style]
+
+        def calc_means(group):
+            group = list(group)
+            for cat in cats:
+                data = [mean(doc, cat) for doc in group]
+                yield cat, np.mean(data)
+
         if args.cmd == 'report':
-            assert args.style == 'per-N'
-            headers = ['N', 'Size', 'Category', 'Time  / N [\u00B5s]']
+            headers = ['N', 'Size', 'Category', label]
             rows = []
 
-            for doc in docs:
-                for i, (cat, values) in enumerate(doc['data'].items()):
-                    n, min_value = list(sorted(values, key=lambda x: x[1]))[0]
-                    mean_min_value = 1e6 * min_value / n / doc['meta']['N']
+            for (N, total), group in groupby(docs, key=group_key):
+                for i, (cat, mmv) in enumerate(calc_means(group)):
                     if i:
-                        rows.append([None, None, cat, mean_min_value])
+                        rows.append([None, None, cat, mmv])
                     else:
-                        rows.append(
-                            [doc['meta']['N'], fmt_size(doc['size']['total']),
-                             cat, mean_min_value])
+                        rows.append([N, fmt_size(total), cat, mmv])
             print(tabulate(rows, headers=headers))
 
         elif args.cmd == 'plot':
-            from itertools import groupby
-            import numpy as np
             from matplotlib import pyplot as plt
 
             fig, ax = plt.subplots()
 
             def fmt_doc(doc):
-                return "{} ({})".format(doc['meta']['N'], fmt_size(doc['size']['total']))
-
-            def _calc_means(doc):
-                for cat in sorted(doc['data']):
-                    values = doc['data'][cat]
-                    n, min_value = list(sorted(values, key=lambda x: x[1]))[0]
-                    if args.style in ('per-N', 'factor'):
-                        yield cat, 1e6 * min_value / n / doc['meta']['N']
-                    elif args.style in ('per-size'):
-                        yield cat, 1e6 * min_value / n / doc['size']['total']
-                    elif args.style == 'absolute':
-                        yield cat, min_value / n
-                    elif args.style == 'num-per-minute':
-                        print(cat, 1.0 / (min_value / n));
-                        yield cat, 1.0 / (60 * min_value / n)
-                    else:
-                        raise NotImplementedError(args.style)
-
-            def calc_means(group):
-                def mean(doc, cat):
-                    n, min_value = list(sorted(doc['data'][cat], key=lambda x: x[1]))[0]
-                    if args.style == 'per-N':
-                        return min_value / n / doc['meta']['N']
-
-                group = list(group)
-                for cat in cats:
-                    data = [mean(doc, cat) for doc in group]
-                    yield cat, np.mean(data)
-
-            cats = list(sorted(docs[0]['data']))
+                return "N={} ({})".format(doc['meta']['N'], fmt_size(doc['size']['total']))
 
             width = 1.0
             data = []
@@ -256,18 +253,7 @@ if __name__ == '__main__':
 
             ax.set_xticks(1.2 * ind)
             ax.set_xticklabels([key for key, _ in groupby(docs, key=fmt_doc)])
-            if args.style == 'factor':
-                ax.set_ylabel("X")
-            elif args.style == 'absolute':
-                ax.set_ylabel("Time [s]")
-            elif args.style == 'per-N':
-                ax.set_ylabel("Time / N [\u00B5s]")
-            elif args.style == 'per-size':
-                ax.set_ylabel("Time / size [\u00B5s/Bytes]")
-            elif args.style == 'num-per-minute':
-                ax.set_ylabel("Per Second [s-1]")
-            else:
-                raise NotImplementedError(args.style)
+            ax.set_ylabel(label)
             ax.legend([p_[0] for p_ in p], list(map(tr, cats)))
             fig.tight_layout()
             plt.show()
