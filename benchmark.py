@@ -85,8 +85,7 @@ if __name__ == '__main__':
         '-N', nargs='+', type=int, default=[100, 1000, 10000])
     parser.add_argument(
         '-k', '--num-keys', type=int, nargs='+', default=[10])
-    parser.add_argument(
-        '--num-doc-keys', type=int, nargs='+', default=[10])
+    parser.add_argument('--num-doc-keys', type=int, nargs='+')
     parser.add_argument(
         '-s', '--data-size', type=int, nargs='+', default=[100])
     parser.add_argument('--data-std', type=float, default=25)
@@ -117,6 +116,9 @@ if __name__ == '__main__':
         return [doc['meta'][k] for k in ('N', 'num_keys', 'num_doc_keys', 'data_size')]
 
     if args.cmd == 'run':
+        if args.num_doc_keys is None:
+            args.num_doc_keys = args.num_keys
+
         for N, num_keys, num_doc_keys, data_size in product(
                 args.N, args.num_keys, args.num_doc_keys, args.data_size):
             assert all(isinstance(_, int) for _ in (N, data_size, num_keys, num_doc_keys))
