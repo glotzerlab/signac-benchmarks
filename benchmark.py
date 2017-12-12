@@ -90,6 +90,7 @@ if __name__ == '__main__':
         '-s', '--data-size', type=int, nargs='+', default=[100])
     parser.add_argument('--data-std', type=float, default=25)
     parser.add_argument('-p', '--profile', action='store_true')
+    parser.add_argument('--profile-sort', default='cumtime')
     parser.add_argument('-r', '--seed', type=int, default=0)
     parser.add_argument('-c', '--categories', nargs='+')
     parser.add_argument('--overwrite', action='store_true')
@@ -286,7 +287,7 @@ if __name__ == '__main__':
                     add_to_stats(doc)
 
         stats.strip_dirs()
-        stats.sort_stats('cumtime')
+        stats.sort_stats(args.profile_sort)
         stats.print_stats()
 
     else:
