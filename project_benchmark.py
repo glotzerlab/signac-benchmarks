@@ -77,7 +77,7 @@ def benchmark_project(project, keys=None):
             setup=setup+"jobid = random.choice(list(islice(project, 100))).get_id()"))
 
     run('iterate_100', Timer(
-        "list(islice((j for p in repeat(project, 1) for j in p), 100))", setup))
+        "list(islice((j for p in repeat(project, 1) for j in p), 100))", setup), 3, 1)
 
     run('search_lean_filter', Timer(
             stmt="len(project.find_jobs(f))",
@@ -89,6 +89,6 @@ def benchmark_project(project, keys=None):
 
     run('index_100', Timer(
         stmt="list(islice((_ for p in repeat(project) for _ in p.index()), 100))",
-        setup=setup))
+        setup=setup), 3, 1)
 
     return data
