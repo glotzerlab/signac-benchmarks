@@ -10,6 +10,7 @@ from cProfile import Profile
 from pstats import Stats
 from contextlib import contextmanager
 from itertools import product, groupby
+from multiprocessing import Pool
 
 from tabulate import tabulate
 from tqdm import tqdm
@@ -29,7 +30,7 @@ def _random_str(size):
     return ''.join(random.choice(string.ascii_lowercase) for _ in range(size))
 
 
-def make_doc(i, num_keys=1, data_size=0):
+def _make_doc(i, num_keys=1, data_size=0):
     assert num_keys >= 1
     assert data_size >= 0
 
@@ -38,23 +39,27 @@ def make_doc(i, num_keys=1, data_size=0):
     return doc
 
 
+def _make_job(project, i, num_keys, num_doc_keys, data_size, data_std):
+    size = max(0, int(random.gauss(data_size, data_std)))
+    job = project.open_job(_make_doc(i, num_keys, size))
+    if num_doc_keys > 0:
+        size = max(0, int(random.gauss(data_size, data_std)))
+        job.document.update(_make_doc(i, num_doc_keys, size))
+    else:
+        job.init()
+
+
 def generate_random_data(project, N_sp, num_keys=1, num_doc_keys=0, data_size=0, data_std=0):
     assert len(project) == 0
 
-    def make(i):
-        size = max(0, int(random.gauss(data_size, data_std)))
-        job = project.open_job(make_doc(i, num_keys, size))
-        if num_doc_keys > 0:
-            size = max(0, int(random.gauss(data_size, data_std)))
-            job.document.update(make_doc(i, num_doc_keys, size))
-        else:
-            job.init()
-
-    list(map(make, tqdm(range(N_sp), desc='generate random project data')))
+    with Pool() as pool:
+        p = [(project, i, num_keys, num_doc_keys, data_size, data_std) for i in range(N_sp)]
+        list(pool.starmap(_make_job, tqdm(p, desc='init random project data')))
 
 
 @contextmanager
-def setup_project(N, num_keys, num_doc_keys, data_size, data_std, seed=0, root=None):
+def setup_random_project(N, num_keys=1, num_doc_keys=0,
+                         data_size=0, data_std=0, seed=0, root=None):
     random.seed(seed)
     if not isinstance(N, int):
         raise TypeError("N must be an integer!")
