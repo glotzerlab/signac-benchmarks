@@ -16,7 +16,7 @@ class Timer(timeit.Timer):
 
 def size(fn):
     try:
-        return os.stat(fn).st_size
+        return os.path.getsize(fn)
     except FileNotFoundError:
         return 0
 
