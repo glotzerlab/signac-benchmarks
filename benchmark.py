@@ -1,22 +1,29 @@
 #!/usr/bin/env python
 import sys
+import six
 import random
 import string
 import platform
 import base64
 import json
-from tempfile import TemporaryDirectory, NamedTemporaryFile
+import warnings
+import logging
 from cProfile import Profile
 from pstats import Stats
 from contextlib import contextmanager
 from itertools import product, groupby
 from multiprocessing import Pool
-
+from tempfile import NamedTemporaryFile
 from tabulate import tabulate
 from tqdm import tqdm
 import signac
 from signac import Collection
 import project_benchmark as pb
+
+if six.PY2:
+    from tempdir import TemporaryDirectory
+else:
+    from tempfile import TemporaryDirectory
 
 
 def fmt_size(size, units=None):
@@ -39,7 +46,7 @@ def _make_doc(i, num_keys=1, data_size=0):
     return doc
 
 
-def _make_job(project, i, num_keys, num_doc_keys, data_size, data_std):
+def _make_job(project, num_keys, num_doc_keys, data_size, data_std, i):
     size = max(0, int(random.gauss(data_size, data_std)))
     job = project.open_job(_make_doc(i, num_keys, size))
     if num_doc_keys > 0:
@@ -49,12 +56,23 @@ def _make_job(project, i, num_keys, num_doc_keys, data_size, data_std):
         job.init()
 
 
-def generate_random_data(project, N_sp, num_keys=1, num_doc_keys=0, data_size=0, data_std=0):
+def generate_random_data(project, N_sp, num_keys=1, num_doc_keys=0,
+                         data_size=0, data_std=0, parallel=True):
     assert len(project) == 0
 
-    with Pool() as pool:
-        p = [(project, i, num_keys, num_doc_keys, data_size, data_std) for i in range(N_sp)]
-        list(pool.starmap(_make_job, tqdm(p, desc='init random project data')))
+    if six.PY2:
+        if parallel:
+            warnings.warn("Function 'generate_random_data()' not parallelized for Python 2.")
+            parallel = False
+
+    if parallel:
+        with Pool() as pool:
+            p = [(project, num_keys, num_doc_keys, data_size, data_std, i) for i in range(N_sp)]
+            list(pool.starmap(_make_job, tqdm(p, desc='init random project data')))
+    else:
+        from functools import partial
+        make = partial(_make_job, project, num_keys, num_doc_keys, data_size, data_std)
+        list(map(make, tqdm(range(N_sp), desc='init random project data')))
 
 
 @contextmanager
@@ -67,22 +85,17 @@ def setup_random_project(N, num_keys=1, num_doc_keys=0,
     with TemporaryDirectory(dir=root) as tmp:
         project = signac.init_project('benchmark-N={}'.format(N), root=tmp)
         generate_random_data(project, N, num_keys, num_doc_keys, data_size, data_std)
-        try:
-            project._update_cache()  # !!!
-        except AttributeError:
-            print("Can't use cache!")
         yield project
 
 
 def tr(s):
     return {
-        'determine_len': "Determine project size",
-        'iterate_1000': "Iterate through all jobs",
-        'iterate_1000_cached': "Iterate through all jobs (cached)",
+        'determine_len': "Determine project size (10x)",
+        'iterate': "Iterate through all jobs",
         'index_1000': "Generate project index",
         'search_rich_filter': "Search with rich filter",
         'search_lean_filter': "Search with lean filter",
-        'select_job_by_id': "Select job by id",
+        'select_job_by_id': "Select job by id (100x)",
     }.get(s, s)
 
 
@@ -99,6 +112,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '-s', '--data-size', type=int, nargs='+', default=[100])
     parser.add_argument('--data-std', type=float, default=25)
+    parser.add_argument('--cached', action='store_true')
     parser.add_argument('-p', '--profile', action='store_true')
     parser.add_argument('--profile-sort', default='cumtime')
     parser.add_argument('--no-strip-dirs', action='store_true')
@@ -117,9 +131,18 @@ if __name__ == '__main__':
             'inverted',   # number of operations per minute
         ], default='per-N')
     parser.add_argument('--db', action='store_true')
+    parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
 
-    q_reports = {'profile': {'$exists': False}, 'meta.categories': None}
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+
+    q_reports = {
+        'profile': {'$exists': False},
+        'meta.cached': args.cached,
+        'meta.categories': None}
     if args.query:
         q_reports.update(json.loads(args.query))
 
@@ -139,6 +162,7 @@ if __name__ == '__main__':
                 'num_doc_keys': num_doc_keys,
                 'data_size': data_size,
                 'seed': args.seed,
+                'cached': args.cached,
                 'categories': args.categories,
                 'platform': platform.uname()._asdict(),
                 'versions': {
@@ -159,6 +183,8 @@ if __name__ == '__main__':
             with setup_random_project(N, num_keys, num_doc_keys,
                                       data_size=data_size, data_std=args.data_std,
                                       seed=args.seed, root=args.root) as project:
+                if args.cached:
+                    project.update_cache()
                 doc['size'] = pb.determine_project_size(project)
 
                 if args.profile:
@@ -197,12 +223,11 @@ if __name__ == '__main__':
 
         def mean(doc, cat):
             n, min_value = list(sorted(doc['data'][cat], key=lambda x: x[1]))[0]
-            if '2000' in cat:
-                min_value *= doc['meta']['N'] / 2000
-            elif '1000' in cat:
-                min_value *= doc['meta']['N'] / 1000
-            elif '100' in cat:
-                min_value *= doc['meta']['N'] / 100
+
+            if cat == 'determine_len':
+                min_value *= 10
+            elif cat == 'select_job_by_id':
+                min_value *= 100
 
             if args.style == 'per-N':
                 return 10e3 * min_value / n / doc['meta']['N']
@@ -280,10 +305,13 @@ if __name__ == '__main__':
             ax.set_xticklabels([key for key, _ in groupby(docs, key=fmt_doc)])
             ax.set_ylabel(label)
             if args.style in ('per-N', 'absolute'):
-                ax.set_ylim(0, max(x.max() + .1, 10.0))
+                ax.set_ylim(0, max(x.max() + .1, 2.5))
             ax.legend([p_[0] for p_ in p], list(map(tr, cats)), ncol=2)
             ax.grid()
-            ax.set_title(args.filename)
+            if args.cached:
+                ax.set_title(args.filename + ' (cached)')
+            else:
+                ax.set_title(args.filename)
             fig.tight_layout()
             plt.show()
 
@@ -296,7 +324,10 @@ if __name__ == '__main__':
                 tmp.flush()
                 stats.add(tmp.name)
 
-        q_profile = {'profile': {'$ne': None}}
+        q_profile = {
+                'profile': {'$ne': None},
+                'meta.cached': args.cached
+        }
         if args.query:
             q_profile.update(json.loads(args.query))
 

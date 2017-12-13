@@ -1,8 +1,11 @@
 import os
 import timeit
 from collections import OrderedDict
+import logging
 
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 
 class Timer(timeit.Timer):
@@ -67,6 +70,7 @@ def benchmark_project(project, keys=None):
 
     def run(key, timer, repeat=3, number=10):
         if keys is None or key in keys:
+            logger.info("Run '{}'...".format(key))
             data[key] = timer.repeat(repeat=repeat, number=number)
 
     run('determine_len', Timer('len(project)', setup=setup))
@@ -75,23 +79,15 @@ def benchmark_project(project, keys=None):
             stmt="project.open_job(id=jobid)",
             setup=setup+"jobid = random.choice(list(islice(project, 100))).get_id()"))
 
-    run('iterate_2000', Timer(
-        "list(islice((j for p in repeat(project, 1) for j in p), 2000))", setup), 3, 1)
-
-    run('iterate_2000_cached', Timer(
-        stmt="list(islice((j for p in repeat(project, 1) for j in p), 2000))",
-        setup=setup + "list(project)"))
+    run('iterate', Timer("list(project)", setup), 3, 10)
 
     run('search_lean_filter', Timer(
             stmt="len(project.find_jobs(f))",
-            setup=setup+"sp = project.open_job(id=random.choice(list(project.find_job_ids()))).sp(); k, v = sp.popitem(); f = {k: v}"))
+            setup=setup+"sp = project.open_job(id=random.choice(list(project.find_job_ids()))).sp();"
+                        "k, v = sp.popitem(); f = {k: v}"))
 
     run('search_rich_filter', Timer(
             stmt="len(project.find_jobs(f))",
             setup=setup+"f = project.open_job(id=random.choice(list(project.find_job_ids()))).sp()"))
-
-    run('index_1000', Timer(
-        stmt="list(islice((_ for p in repeat(project) for _ in p.index()), 1000))",
-        setup=setup), 3, 1)
 
     return data
