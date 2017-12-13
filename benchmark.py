@@ -156,9 +156,9 @@ if __name__ == '__main__':
             if args.dry_run:
                 print("Expected size:", fmt_size(int(expected_size)))
                 continue
-            with setup_project(N, num_keys, num_doc_keys,
-                               data_size=data_size, data_std=args.data_std,
-                               seed=args.seed, root=args.root) as project:
+            with setup_random_project(N, num_keys, num_doc_keys,
+                                      data_size=data_size, data_std=args.data_std,
+                                      seed=args.seed, root=args.root) as project:
                 doc['size'] = pb.determine_project_size(project)
 
                 if args.profile:
