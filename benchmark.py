@@ -62,15 +62,19 @@ def setup_project(N, num_keys, num_doc_keys, data_size, data_std, seed=0, root=N
     with TemporaryDirectory(dir=root) as tmp:
         project = signac.init_project('benchmark-N={}'.format(N), root=tmp)
         generate_random_data(project, N, num_keys, num_doc_keys, data_size, data_std)
+        try:
+            project._update_cache()  # !!!
+        except AttributeError:
+            print("Can't use cache!")
         yield project
 
 
 def tr(s):
     return {
         'determine_len': "Determine project size",
-        'iterate_100': "Iterate through all jobs",
-        'iterate_100_cached': "Iterate throughall jobs (cached)",
-        'index_100': "Generate project index",
+        'iterate_1000': "Iterate through all jobs",
+        'iterate_1000_cached': "Iterate through all jobs (cached)",
+        'index_1000': "Generate project index",
         'search_rich_filter': "Search with rich filter",
         'search_lean_filter': "Search with lean filter",
         'select_job_by_id': "Select job by id",
@@ -187,7 +191,11 @@ if __name__ == '__main__':
 
         def mean(doc, cat):
             n, min_value = list(sorted(doc['data'][cat], key=lambda x: x[1]))[0]
-            if '100' in cat:
+            if '2000' in cat:
+                min_value *= doc['meta']['N'] / 2000
+            elif '1000' in cat:
+                min_value *= doc['meta']['N'] / 1000
+            elif '100' in cat:
                 min_value *= doc['meta']['N'] / 100
 
             if args.style == 'per-N':

@@ -75,11 +75,11 @@ def benchmark_project(project, keys=None):
             stmt="project.open_job(id=jobid)",
             setup=setup+"jobid = random.choice(list(islice(project, 100))).get_id()"))
 
-    run('iterate_100', Timer(
-        "list(islice((j for p in repeat(project, 1) for j in p), 100))", setup), 3, 1)
+    run('iterate_2000', Timer(
+        "list(islice((j for p in repeat(project, 1) for j in p), 2000))", setup), 3, 1)
 
-    run('iterate_100_cached', Timer(
-        stmt="list(islice((j for p in repeat(project, 1) for j in p), 100))",
+    run('iterate_2000_cached', Timer(
+        stmt="list(islice((j for p in repeat(project, 1) for j in p), 2000))",
         setup=setup + "list(project)"))
 
     run('search_lean_filter', Timer(
@@ -90,8 +90,8 @@ def benchmark_project(project, keys=None):
             stmt="len(project.find_jobs(f))",
             setup=setup+"f = project.open_job(id=random.choice(list(project.find_job_ids()))).sp()"))
 
-    run('index_100', Timer(
-        stmt="list(islice((_ for p in repeat(project) for _ in p.index()), 100))",
+    run('index_1000', Timer(
+        stmt="list(islice((_ for p in repeat(project) for _ in p.index()), 1000))",
         setup=setup), 3, 1)
 
     return data
