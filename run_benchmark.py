@@ -131,7 +131,12 @@ def main(args):
         return False
 
     def store_result(key, doc):
-        if args.output != '-':
+        if args.output == '-':
+            if args.json:
+                print(json.dumps(doc, indent=2))
+            else:
+                pprint(doc)
+        else:
             with Collection.open(args.output) as c:
                 c.replace_one(key, doc, upsert=True)
 
@@ -151,6 +156,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '-o', '--output', nargs='?', default='benchmark.txt',
         help="Specify which collection file to store results to or '-' for None.")
+    parser.add_argument(
+        '--json', action='store_true',
+        help="Use JSON formatting if the --output argument is '-'.")
     parser.add_argument(
         '-N', type=int, default=100,
         help="The number of data/ state points within the benchmarked project.")
