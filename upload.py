@@ -15,11 +15,6 @@ db = signac.get_database('testing')
 with signac.Collection.open(args.filename) as c:
     for doc in c:
         del doc['_id']
-        try:
-            dtr_version = doc['meta']['versions'].pop('datreant.core')
-            doc['meta']['versions']['datreant_core'] = dtr_version
-        except KeyError:
-            pass
         key = dict(_traverse_tree(doc['meta'], key='meta'))
         key['profile'] = {'$ne' if doc.get('profile') else '$eq': None}
         db.signac_benchmarks.replace_one(key, doc, upsert=True)

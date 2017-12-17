@@ -92,7 +92,7 @@ def benchmark_datreant_core(args, check_skip, store_result):
     doc = default_doc(args)
     doc['meta']['versions'] = {
         'python': '.'.join(map(str, sys.version_info)),
-        'datreant.core': dtr.__version__}
+        'datreant': dtr.__version__}
     key = doc.copy()
     key['profile'] = {'$exists': args.profile}
 
@@ -142,7 +142,7 @@ def main(args):
 
     if args.tool == 'signac':
         benchmark_signac(args, check_skip, store_result)
-    elif args.tool == 'datreant.core':
+    elif args.tool == 'datreant':
         benchmark_datreant_core(args, check_skip, store_result)
     else:
         raise ValueError("Unknown tool '{}'.".format(args.tool))
@@ -151,7 +151,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        'tool', choices=['signac', 'datreant.core'], nargs='?', default='signac',
+        'tool', choices=['signac', 'datreant'], nargs='?', default='signac',
         help="Specify which data management tool to benchmark.")
     parser.add_argument(
         '-o', '--output', nargs='?', default='benchmark.txt',
