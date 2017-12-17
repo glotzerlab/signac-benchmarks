@@ -123,7 +123,7 @@ def main(args):
         return
 
     def check_skip(key):
-        if not args.overwrite or args.output == '-':
+        if not (args.overwrite or args.output == '-'):
             with Collection.open(args.output) as c:
                 if len(c.find(key)) >= 1:
                     print("Already ran.")
