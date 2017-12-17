@@ -5,13 +5,17 @@ import random
 import argparse
 import platform
 import base64
+import json
+from pprint import pprint
 from cProfile import Profile
 from contextlib import contextmanager
 from tempfile import NamedTemporaryFile
+from tempfile import gettempdir
 
 from signac import Collection
 
 from util import fmt_size
+from util import get_partition
 
 
 def expected_size(args):
@@ -19,6 +23,7 @@ def expected_size(args):
 
 
 def default_doc(args):
+    tmpdir = gettempdir() if args.root is None else args.root
     return {'meta': {
         'tool': args.tool,
         'N': args.N,
@@ -29,6 +34,7 @@ def default_doc(args):
         'cached': args.cached,
         'categories': args.categories,
         'platform': platform.uname()._asdict(),
+        'fstype': get_partition(tmpdir).fstype,
     }}
 
 
