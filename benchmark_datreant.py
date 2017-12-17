@@ -104,7 +104,7 @@ def setup_random_bundle(N, num_keys=1, num_doc_keys=0,
         yield tmp
 
 
-def benchmark_bundle(root, keys=None):
+def benchmark_bundle(root, keys=None, skip_rich_filter=False):
     setup = "import datreant.core as dtr; bundle = dtr.Bundle('{}/workspace/*');".format(root)
     setup += "import random;"
 
@@ -134,9 +134,10 @@ def benchmark_bundle(root, keys=None):
         setup=setup + 'import random; sp = dtr.Treant(random.choice(bundle)).categories;'
         'k, v = dict(sp).popitem();'))
 
-    run('search_rich_filter', Timer(
-        stmt="bundle.categories.groupby(keys)[tuple(values)];",
-        setup=setup + "sp = dict(dtr.Treant(random.choice(bundle)).categories);"
-                      "keys = list(sp); values = [sp[k] for k in keys];"))
+    if not skip_rich_filter:
+        run('search_rich_filter', Timer(
+            stmt="bundle.categories.groupby(keys)[tuple(values)];",
+            setup=setup + "sp = dict(dtr.Treant(random.choice(bundle)).categories);"
+                          "keys = list(sp); values = [sp[k] for k in keys];"))
 
     return data

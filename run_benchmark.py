@@ -105,12 +105,17 @@ def benchmark_datreant_core(args, check_skip, store_result):
             seed=args.seed, root=args.root) as bundle:
         assert not args.cached
         doc['size'] = determine_bundle_size(bundle)
+
+        skip_rich_filter = args.N > 1000
+
         if args.profile:
             with run_with_profile() as profile:
-                doc['data'] = benchmark_bundle(bundle, args.categories)
+                doc['data'] = benchmark_bundle(
+                    bundle, args.categories, skip_rich_filter=skip_rich_filter)
             doc['profile'] = profile.stats
         else:
-            doc['data'] = benchmark_bundle(bundle, args.categories)
+            doc['data'] = benchmark_bundle(
+                bundle, args.categories, skip_rich_filter=skip_rich_filter)
 
     store_result(key, doc)
 
