@@ -115,26 +115,26 @@ def benchmark_bundle(root, keys=None):
             logger.info("Run '{}'...".format(key))
             data[key] = timer.repeat(repeat=repeat, number=number)
 
-    run('N_determine_len', Timer('len(bundle)', setup=setup))
+    run('determine_len', Timer('len(bundle)', setup=setup))
 
-    run('1_select_by_id', Timer(
+    run('select_by_id', Timer(
         stmt="dtr.Treant(path).categories",
         setup=setup + "path = random.choice(bundle)"))
 
-    run('N_iterate', Timer(
+    run('iterate', Timer(
         stmt='[dtr.Treant(b).categories for b in bundle]',
         setup=setup))
 
-    run('N_iterate_single_pass', Timer(
+    run('iterate_single_pass', Timer(
         stmt='[dtr.Treant(b).categories for b in bundle]',
         setup=setup), number=1)
 
-    run('N_search_lean_filter', Timer(
+    run('search_lean_filter', Timer(
         stmt="bundle.categories.groupby(k)[v]",
         setup=setup + 'import random; sp = dtr.Treant(random.choice(bundle)).categories;'
         'k, v = dict(sp).popitem();'))
 
-    run('N_search_rich_filter', Timer(
+    run('search_rich_filter', Timer(
         stmt="bundle.categories.groupby(keys)[tuple(values)];",
         setup=setup + "sp = dict(dtr.Treant(random.choice(bundle)).categories);"
                       "keys = list(sp); values = [sp[k] for k in keys];"))

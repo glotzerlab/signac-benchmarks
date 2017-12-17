@@ -147,25 +147,25 @@ def benchmark_project(project, keys=None):
             logger.info("Run '{}'...".format(key))
             data[key] = timer.repeat(repeat=repeat, number=number)
 
-    run('N_determine_len', Timer('len(project)', setup=setup))
+    run('determine_len', Timer('len(project)', setup=setup))
 
-    run('1_select_by_id', Timer(
+    run('select_by_id', Timer(
         stmt="project.open_job(id=jobid)",
         setup=setup + "jobid = random.choice(list(islice(project, 100))).get_id()"))
 
-    run('N_iterate', Timer("list(project)", setup), 3, 10)
+    run('iterate', Timer("list(project)", setup), 3, 10)
 
-    run('N_iterate_single_pass', Timer("list(project)", setup), number=1)
+    run('iterate_single_pass', Timer("list(project)", setup), number=1)
 
     #run('N_iterate', Timer("list(map(noop, project))", setup))
     #run('N_iterate_parallel', Timer("list(pool.map(noop, project))", setup_parallel))
 
-    run('N_search_lean_filter', Timer(
+    run('search_lean_filter', Timer(
         stmt="len(project.find_jobs(f))",
         setup=setup + "sp = project.open_job(id=random.choice(list(project.find_job_ids()))).sp();"
         "k, v = sp.popitem(); f = {k: v}"))
 
-    run('N_search_rich_filter', Timer(
+    run('search_rich_filter', Timer(
         stmt="len(project.find_jobs(f))",
         setup=setup + "f = project.open_job(id=random.choice(list(project.find_job_ids()))).sp()"))
 

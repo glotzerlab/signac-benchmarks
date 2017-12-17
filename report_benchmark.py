@@ -1,38 +1,44 @@
 import json
 import argparse
+from math import log, sqrt
 
 import pandas as pd
 from signac import Collection
 
+from complexity import COMPLEXITY
+
 
 def strip_complexity(cat):
-    assert cat[1] == '_'
-    c = cat[0]
-    return c, cat[2:]
+    if len(cat) > 1 and cat[1] == '_':
+        return COMPLEXITY[cat[2:]], cat[2:]
+    else:
+        return COMPLEXITY.get(cat), cat
 
 
 def normalize(data, N):
     for cat, x in data.items():
         cplx, cat_ = strip_complexity(cat)
         x_mean = min([(y/n) for n, y in x])
-        if cplx == 'N':
-            x_mean /= N
-        if cat_ == 'determine_len':
-            x_mean *= 100
+        if cplx is not None:
+            x_mean /= eval(cplx)
         yield cat, 1e3 * x_mean
 
 
 def tr(s):
-    return {
-        '1_select_by_id': "Select by ID O(1)",
-        'N_determine_len': "Determine N (x100) O(N)",
-        'N_iterate': "Iterate (multiple passes) O(N)",
-        'N_iterate_single_pass': "Iterate (single pass) O(N)",
-        'N_search_lean_filter': "Search w/ lean filter O(N)",
-        'N_search_rich_filter': "Search w/ rich filter O(N)",
+    cplx, cat = strip_complexity(s)
+    t = {
+        'select_by_id': "Select by ID",
+        'determine_len': "Determine N",
+        'iterate': "Iterate (multiple passes)",
+        'iterate_single_pass': "Iterate (single pass)",
+        'search_lean_filter': "Search w/ lean filter",
+        'search_rich_filter': "Search w/ rich filter",
         'datreant.core': "datreant",
         'tool,N': "Tool, N",
-    }.get(s, s)
+    }.get(cat, cat)
+    if cplx is not None:
+        t += ' O({})'.format(cplx)
+    return t
 
 
 def main(args):
