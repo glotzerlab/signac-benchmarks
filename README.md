@@ -2,10 +2,13 @@
 
 ## About
 
-This repository contains scripts and one jupyter notebook to execute benchmarks for the signac core application.
+This repository contains scripts and one jupyter notebook to execute benchmarks for the [signac core](http://www.signac.io) application.
 In the current version, they are optionally compared against [datreant](http://datreant.org/).
 
 Author: Carl Simon Adorf, csadorf@umich.edu
+
+All code within this repository, except for the `tempdir.py` module, are distributed under the MIT License.
+The full license text is in the `LICENSE.txt` file.
 
 ## Quickstart
 
@@ -13,7 +16,7 @@ To run benchmarks, first clone this repository, then execute:
 ```bash
 ./run.sh
 ```
-This will generate collection file callede `benchmark.txt`, which contains the benchmark results.
+This will generate a collection file called `benchmark.txt`, which contains the benchmark results.
 
 To visualize and plot the benchmark results, execute the `report.ipynb` jupyter notebook.
 
