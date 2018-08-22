@@ -19,7 +19,6 @@
 # SOFTWARE.
 import json
 import argparse
-from math import log, sqrt
 
 import pandas as pd
 from signac import Collection
@@ -60,20 +59,21 @@ def tr(s):
     return t
 
 
-def main(args):
-    with Collection.open(args.filename) as c:
-        if args.filter:
-            docs = list(c.find(json.loads(args.filter)))
-        else:
-            docs = list(c)
+def read_benchmark(filename, filter):
+    with Collection.open(filename) as c:
+        docs = list(c.find(filter))
 
     df_meta = pd.DataFrame(
         {doc['_id']: doc['meta'] for doc in docs}).T
     df_data = pd.DataFrame(
         {doc['_id']: dict(normalize(doc['data'], doc['meta']['N'])) for doc in docs}).T
 
-    df = pd.concat([df_meta, df_data], axis=1)
+    return pd.concat([df_meta, df_data], axis=1)
 
+
+def main(args):
+    filter = json.loads(args.filter) if args.filter else None
+    df = read_benchmark(args.filename, filter)
     print("All values in ms.")
     print(df.rename(columns=tr).groupby(['tool', 'N']).mean().round(2).T)
 
