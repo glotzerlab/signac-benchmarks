@@ -3,4 +3,4 @@ tqdm
 psutil
 pandas
 signac
-datreant
+datreant.core
