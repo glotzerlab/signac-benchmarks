@@ -47,7 +47,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--pass-above',
         type=float,
-        default=0.99,
+        default=0.90,
         help="Specify a minimal score that we need to pass.")
     args = parser.parse_args()
 
