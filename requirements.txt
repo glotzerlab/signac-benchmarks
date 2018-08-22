@@ -1,6 +1,6 @@
 python
 tqdm
 psutil
+pandas
 signac
-datreant.core
-
+datreant
