@@ -2,7 +2,7 @@
 
 ## About
 
-This repository contains scripts and one jupyter notebook to execute benchmarks for the [signac core](http://www.signac.io) application.
+This repository contains scripts and one jupyter notebook to execute benchmarks for the [signac core](https://signac.readthedocs.io/) application.
 In the current version, they are optionally compared against [datreant](http://datreant.org/).
 
 Author: Carl Simon Adorf, csadorf@umich.edu
